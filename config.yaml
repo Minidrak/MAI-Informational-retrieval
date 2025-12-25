@@ -1,0 +1,40 @@
+db:
+  host: localhost
+  port: 27017
+  database: search_engine_db
+  collection: documents
+  username: ""  
+  password: ""  
+
+logic:
+
+  delay_between_requests: 5.0
+
+  max_pages: 0
+
+  recheck_interval_days: 7
+
+  restore_queue_from_saved: true
+
+  respect_robots_txt: true
+
+  use_wikipedia_api: true
+
+  user_agent: "MAI-Crawler"
+  
+  # Таймаут для HTTP запросов (в секундах)
+  request_timeout: 30
+
+  max_depth: 3
+
+  sources:
+    - url: "https://uznayvse.ru/znamenitosti/russkie-zvezdy-pevci/"
+      name: "UznayVse - Русские певцы"
+      enabled: false
+    - url: "https://www.belcanto.ru/persons.html"
+      name: "Belcanto - Музыканты"
+      enabled: false
+    - url: "https://ru.wikipedia.org/wiki/Категория:Музыканты_по_алфавиту"
+      name: "Wikipedia - Музыканты"
+      enabled: true
+ 

@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:6
+    container_name: search_mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./backup:/backup
+    networks:
+      - search_net
+
+  builder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: search_builder
+    volumes:
+      - ./data:/data
+      - ./backup:/backup
+    depends_on:
+      - mongodb
+    networks:
+      - search_net
+    command: >
+      sh -c "
+        echo 'Waiting for MongoDB...' &&
+        sleep 5 &&
+        if [ -f /backup/documents.json ]; then
+          echo 'Importing documents...' &&
+          mongoimport --host mongodb --db search_engine_db --collection documents --file /backup/documents.json --jsonArray &&
+          echo 'Import complete'
+        fi &&
+        echo 'Building index...' &&
+        /app/build/indexer --host mongodb --db search_engine_db --collection documents --output /data/index.bin &&
+        echo 'Index built successfully'
+      "
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: search_web
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+    depends_on:
+      - mongodb
+    networks:
+      - search_net
+    command: /app/build/web_server --index /data/index.bin --port 8080
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:
+
+networks:
+  search_net:
+    driver: bridge
