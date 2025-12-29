@@ -33,13 +33,23 @@ std::string Tokenizer::to_lower(const std::string& str) const {
         } else if ((c & 0xE0) == 0xC0 && i + 1 < str.size()) {
             unsigned char c2 = str[i + 1];
             
-            if (c == 0xD0 && c2 >= 0x90 && c2 <= 0xAF) {
-                result += static_cast<char>(c);
+            if (c == 0xD0 && c2 >= 0x90 && c2 <= 0x9F) {
+                result += static_cast<char>(0xD0);
                 result += static_cast<char>(c2 + 0x20);
+            }
+            else if (c == 0xD0 && c2 >= 0xA0 && c2 <= 0xAF) {
+                result += static_cast<char>(0xD1);
+                result += static_cast<char>(c2 - 0x20);
             }
             else if (c == 0xD0 && c2 == 0x81) {
                 result += static_cast<char>(0xD1);
                 result += static_cast<char>(0x91);
+            }
+            else if ((c == 0xD0 && c2 >= 0xB0 && c2 <= 0xBF) ||
+                     (c == 0xD1 && c2 >= 0x80 && c2 <= 0x8F) ||
+                     (c == 0xD1 && c2 == 0x91)) {
+                result += static_cast<char>(c);
+                result += static_cast<char>(c2);
             }
             else {
                 result += static_cast<char>(c);
@@ -157,40 +167,78 @@ std::string Tokenizer::normalize(const std::string& term) const {
     return term;
 }
 
+static size_t get_utf8_char(const std::string& str, size_t pos, std::string& out_char) {
+    if (pos >= str.size()) return 0;
+    
+    unsigned char c = static_cast<unsigned char>(str[pos]);
+
+    if (c < 128) {
+        out_char = str.substr(pos, 1);
+        return 1;
+    }
+
+    if ((c & 0xE0) == 0xC0 && pos + 1 < str.size()) {
+        out_char = str.substr(pos, 2);
+        return 2;
+    }
+
+    out_char.clear();
+    return 1;
+}
+
+static bool is_letter_or_digit(const std::string& ch) {
+    if (ch.empty()) return false;
+
+    if (ch.size() == 1) {
+        unsigned char c = static_cast<unsigned char>(ch[0]);
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
+    }
+
+    if (ch.size() == 2) {
+        unsigned char c1 = static_cast<unsigned char>(ch[0]);
+        unsigned char c2 = static_cast<unsigned char>(ch[1]);
+        
+        if (c1 == 0xD0 && c2 >= 0x90 && c2 <= 0xAF) return true;
+        if (c1 == 0xD0 && c2 >= 0xB0 && c2 <= 0xBF) return true;
+        if (c1 == 0xD1 && c2 >= 0x80 && c2 <= 0x8F) return true;
+        if (c1 == 0xD0 && c2 == 0x81) return true;
+        if (c1 == 0xD1 && c2 == 0x91) return true;
+    }
+    
+    return false;
+}
+
 std::vector<std::string> Tokenizer::tokenize(const std::string& text) const {
     std::string normalized = config_.lowercase ? to_lower(text) : text;
     
     std::vector<std::string> tokens;
     std::string current_token;
+    size_t char_count = 0;
     
-    for (size_t i = 0; i < normalized.size(); ++i) {
-        unsigned char c = normalized[i];
+    size_t i = 0;
+    while (i < normalized.size()) {
+        std::string ch;
+        size_t bytes = get_utf8_char(normalized, i, ch);
         
-        bool is_letter = false;
+        if (bytes == 0) break;
         
-        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
-            is_letter = true;
-            current_token += c;
-        }
-        else if ((c == 0xD0 || c == 0xD1) && i + 1 < normalized.size()) {
-            is_letter = true;
-            current_token += c;
-            current_token += normalized[++i];
-        }
-        
-        if (!is_letter) {
-            if (!current_token.empty()) {
-                if (current_token.size() >= config_.min_length) {
-                    if (!config_.remove_stopwords || stop_words_.find(current_token) == stop_words_.end()) {
-                        tokens.push_back(current_token);
-                    }
+        if (is_letter_or_digit(ch)) {
+            current_token += ch;
+            char_count++;
+            i += bytes;
+        } else {
+            if (!current_token.empty() && char_count >= config_.min_length) {
+                if (!config_.remove_stopwords || stop_words_.find(current_token) == stop_words_.end()) {
+                    tokens.push_back(current_token);
                 }
-                current_token.clear();
             }
+            current_token.clear();
+            char_count = 0;
+            i += bytes;
         }
     }
-    
-    if (!current_token.empty() && current_token.size() >= config_.min_length) {
+
+    if (!current_token.empty() && char_count >= config_.min_length) {
         if (!config_.remove_stopwords || stop_words_.find(current_token) == stop_words_.end()) {
             tokens.push_back(current_token);
         }

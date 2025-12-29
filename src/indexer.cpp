@@ -31,7 +31,13 @@ double IndexStats::avg_term_length(
     return static_cast<double>(total_len) / index.size();
 }
 
-Indexer::Indexer(const Config& config) : config_(config) {}
+Indexer::Indexer(const Config& config) : config_(config) {
+    Tokenizer::Config tok_config;
+    tok_config.min_length = 2;
+    tok_config.lowercase = true;
+    tok_config.remove_stopwords = false;
+    tokenizer_ = Tokenizer(tok_config);
+}
 
 void Indexer::build(const std::string& output_path, size_t limit) {
     
@@ -77,10 +83,12 @@ void Indexer::build(const std::string& output_path, size_t limit) {
         std::string html;
         
         if (doc["url"]) {
-            url = doc["url"].get_string().value.to_string();
+            auto url_view = doc["url"].get_string().value;
+            url = std::string(url_view.data(), url_view.length());
         }
         if (doc["html_content"]) {
-            html = doc["html_content"].get_string().value.to_string();
+            auto html_view = doc["html_content"].get_string().value;
+            html = std::string(html_view.data(), html_view.length());
         }
         
         if (html.empty()) continue;

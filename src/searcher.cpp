@@ -6,6 +6,12 @@ namespace search {
 
 Searcher::Searcher(const std::string& index_path) {
     reader_ = std::make_unique<IndexReader>(index_path);
+    
+    Tokenizer::Config tok_config;
+    tok_config.min_length = 2;
+    tok_config.lowercase = true;
+    tok_config.remove_stopwords = false;
+    tokenizer_ = Tokenizer(tok_config);
 }
 
 Searcher::~Searcher() {
@@ -46,6 +52,9 @@ std::set<uint32_t> Searcher::evaluate(const QueryNode* node) {
         case NodeType::TERM: {
             auto* term_node = static_cast<const TermNode*>(node);
             std::string normalized = tokenizer_.normalize(term_node->term);
+            if (normalized.empty()) {
+                return {};
+            }
             
             auto posting_list = reader_->get_posting_list(normalized);
             return std::set<uint32_t>(posting_list.begin(), posting_list.end());

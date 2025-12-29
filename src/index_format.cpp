@@ -42,17 +42,17 @@ IndexWriter::~IndexWriter() {
 }
 
 void IndexWriter::write_forward_index(const std::vector<DocumentInfo>& docs) {
-    header_.forward_offset = file_.tellp();
-    header_.num_documents = docs.size();
+    header_.forward_offset = static_cast<uint64_t>(file_.tellp());
+    header_.num_documents = static_cast<uint32_t>(docs.size());
     
     for (const auto& doc : docs) {
         file_.write(reinterpret_cast<const char*>(&doc.doc_id), 4);
         
-        uint16_t title_len = doc.title.size();
+        uint16_t title_len = static_cast<uint16_t>(doc.title.size());
         file_.write(reinterpret_cast<const char*>(&title_len), 2);
         file_.write(doc.title.data(), title_len);
         
-        uint16_t url_len = doc.url.size();
+        uint16_t url_len = static_cast<uint16_t>(doc.url.size());
         file_.write(reinterpret_cast<const char*>(&url_len), 2);
         file_.write(doc.url.data(), url_len);
     }
@@ -61,7 +61,7 @@ void IndexWriter::write_forward_index(const std::vector<DocumentInfo>& docs) {
 void IndexWriter::write_inverted_index(
     const std::unordered_map<std::string, std::vector<uint32_t>>& index) {
     
-    header_.num_terms = index.size();
+    header_.num_terms = static_cast<uint32_t>(index.size());
     
     std::vector<std::string> terms;
     terms.reserve(index.size());
@@ -70,17 +70,17 @@ void IndexWriter::write_inverted_index(
     }
     std::sort(terms.begin(), terms.end());
     
-    uint32_t num_terms = terms.size();
+    uint32_t num_terms = static_cast<uint32_t>(terms.size());
     file_.write(reinterpret_cast<const char*>(&num_terms), 4);
     
     for (const auto& term : terms) {
         const auto& posting_list = index.at(term);
         
-        uint8_t term_len = term.size();
+        uint8_t term_len = static_cast<uint8_t>(term.size());
         file_.write(reinterpret_cast<const char*>(&term_len), 1);
         file_.write(term.data(), term_len);
         
-        uint32_t df = posting_list.size();
+        uint32_t df = static_cast<uint32_t>(posting_list.size());
         file_.write(reinterpret_cast<const char*>(&df), 4);
         
         std::vector<uint32_t> sorted_list = posting_list;

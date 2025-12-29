@@ -55,55 +55,68 @@ bool QueryParser::match(const std::string& s) {
     return false;
 }
 
+static size_t get_utf8_char(const std::string& str, size_t pos, std::string& out_char) {
+    if (pos >= str.size()) return 0;
+    
+    unsigned char c = static_cast<unsigned char>(str[pos]);
+    
+    if (c < 128) {
+        out_char = str.substr(pos, 1);
+        return 1;
+    }
+    
+    if ((c & 0xE0) == 0xC0 && pos + 1 < str.size()) {
+        out_char = str.substr(pos, 2);
+        return 2;
+    }
+    
+    out_char.clear();
+    return 1;
+}
+
+static bool is_letter_or_digit(const std::string& ch) {
+    if (ch.empty()) return false;
+    
+    if (ch.size() == 1) {
+        unsigned char c = static_cast<unsigned char>(ch[0]);
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
+    }
+    
+    if (ch.size() == 2) {
+        unsigned char c1 = static_cast<unsigned char>(ch[0]);
+        unsigned char c2 = static_cast<unsigned char>(ch[1]);
+        
+        if (c1 == 0xD0 && c2 >= 0x90 && c2 <= 0xAF) return true;
+        if (c1 == 0xD0 && c2 >= 0xB0 && c2 <= 0xBF) return true;
+        if (c1 == 0xD1 && c2 >= 0x80 && c2 <= 0x8F) return true;
+        if (c1 == 0xD0 && c2 == 0x81) return true;
+        if (c1 == 0xD1 && c2 == 0x91) return true;
+    }
+    
+    return false;
+}
+
 std::string QueryParser::read_term() {
     skip_whitespace();
     
     std::string term;
     
     while (pos_ < query_.size()) {
-        unsigned char c = query_[pos_];
+        std::string ch;
+        size_t bytes = get_utf8_char(query_, pos_, ch);
         
-        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-            (c >= '0' && c <= '9') || c == '-' || c == '_') {
-            term += std::tolower(c);
-            ++pos_;
-        }
-        else if ((c == 0xD0 || c == 0xD1) && pos_ + 1 < query_.size()) {
-            term += c;
-            term += query_[++pos_];
-            ++pos_;
-        }
-        else {
+        if (bytes == 0) break;
+        
+        if (is_letter_or_digit(ch) || 
+            (ch.size() == 1 && (ch[0] == '-' || ch[0] == '_'))) {
+            term += ch;
+            pos_ += bytes;
+        } else {
             break;
         }
     }
     
-    std::string lower;
-    for (size_t i = 0; i < term.size(); ++i) {
-        unsigned char c = term[i];
-        if (c < 128) {
-            lower += std::tolower(c);
-        } else if ((c == 0xD0) && i + 1 < term.size()) {
-            unsigned char c2 = term[i + 1];
-            if (c2 >= 0x90 && c2 <= 0xAF) {
-                lower += c;
-                lower += static_cast<char>(c2 + 0x20);
-            }
-            else if (c2 == 0x81) {
-                lower += static_cast<char>(0xD1);
-                lower += static_cast<char>(0x91);
-            }
-            else {
-                lower += c;
-                lower += c2;
-            }
-            ++i;
-        } else {
-            lower += c;
-        }
-    }
-    
-    return lower;
+    return term;
 }
 
 std::unique_ptr<QueryNode> QueryParser::parse(const std::string& query) {

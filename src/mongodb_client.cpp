@@ -84,15 +84,17 @@ void MongoDBClient::for_each_document(
         Document document;
         
         if (doc["url"]) {
-            document.url = doc["url"].get_string().value.to_string();
+            auto url_view = doc["url"].get_string().value;
+            document.url = std::string(url_view.data(), url_view.length());
         }
         
         if (doc["html_content"]) {
-            document.html_content = doc["html_content"].get_string().value.to_string();
+            auto html_view = doc["html_content"].get_string().value;
+            document.html_content = std::string(html_view.data(), html_view.length());
         }
         
         callback(document);
     }
 }
 
-} // namespace wiki
+}
